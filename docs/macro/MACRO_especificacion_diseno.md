@@ -329,13 +329,13 @@ Eso da **18 códigos** con G = 10 y **36 códigos** con G = 20. Con VDD de refer
 
 ### 6.1 System Module · Oscilador
 
-| Campo | Valor | Por qué | Comprobar |
-|---|---|---|---|
-| Oscillator Select | HFINTOSC | Sin cristal. La PCB no tiene oscilador externo | `OSCCON1` = 0x60 |
-| HF Internal Clock | 16 MHz | PWM de 15,625 kHz con 10 bits y `T2PR` = 255, y 115 200 baud con `SP1BRG` = 34 (valor probado en Micro 3) | `OSCFRQ` = 0x05 |
-| Clock Divider | 1 | Fosc = 16 MHz, `TCY` = 250 ns | — |
-| PLL | No | No hace falta más velocidad. Menos ruido y menos consumo | — |
-| Low-voltage Programming | Habilitado | Obligatorio con SNAP, RA3 = MCLR | `LVP = ON` |
+| Campo                   | Valor      | Por qué                                                                                                   | Comprobar        |
+| ----------------------- | ---------- | --------------------------------------------------------------------------------------------------------- | ---------------- |
+| Oscillator Select       | HFINTOSC   | Sin cristal. La PCB no tiene oscilador externo                                                            | `OSCCON1` = 0x60 |
+| HF Internal Clock       | 16 MHz     | PWM de 15,625 kHz con 10 bits y `T2PR` = 255, y 115 200 baud con `SP1BRG` = 34 (valor probado en Micro 3) | `OSCFRQ` = 0x05  |
+| Clock Divider           | 1          | Fosc = 16 MHz, `TCY` = 250 ns                                                                             | —                |
+| PLL                     | No         | No hace falta más velocidad. Menos ruido y menos consumo                                                  | —                |
+| Low-voltage Programming | Habilitado | Obligatorio con SNAP, RA3 = MCLR                                                                          | `LVP = ON`       |
 
 ### 6.2 System Module · Bits de configuración
 
@@ -373,31 +373,31 @@ Para leer FVRA2X (DIA, 0x8119) se agrega además el módulo **Memory (NVM)** de 
 
 ### 6.4 ADCC (ADC2)
 
-| Campo | Valor | Por qué | Comprobar |
-|---|---|---|---|
-| Enable ADC | Sí | — | `ADCON0.ADON` = 1 |
-| Clock Source | FOSC/ADCLK | Reloj síncrono y determinista | `ADCON0.ADCS` = 0 |
-| Clock divider | **FOSC/32 → TAD = 2 µs** | Dentro de AD20 (0,5–9 µs). Conversión de 28,5 µs | `ADCLK` = 0x0F |
-| Result Alignment | Right | Código directo 0–4095 | `ADCON0.ADFM` = 1 → `ADCON0` = **0x84** |
-| Positive Reference | **FVR** | Corrección 2 | `ADREF.ADPREF` = 11 |
-| Negative Reference | VSS | — | `ADREF` = **0x03** |
-| Auto-conversion Trigger | **TMR4** (postscaled) | Disparo 100 % hardware (§4) | `ADACT` = **0x06** |
-| Operating Mode | **Basic mode** | Sin promedio (restricción del equipo) | `ADCON2.ADMD` = 000 |
-| Continuous operation | No | Una conversión por disparo | `ADCON0.ADCONT` = 0 |
-| Acquisition Count | **640** (MCC debe mostrar 40 µs) | §4.6. Ver la prueba V3 | `ADACQH:ADACQL` = 0x02:0x80 |
-| Precharge Count | 0 | Sin precarga. C22/C32 aportan la carga | `ADPRE` = 0 |
-| Additional S&H capacitance | 0 | La capacidad extra alarga el asentamiento | `ADCAP` = 0 |
-| Repeat count | 0 | Sin ráfagas ni promedio | `ADRPT` = 0 |
-| Double sampling | Deshabilitado | Evita la errata 1.1.2 | `ADCON1` = 0x00 |
-| Guard ring / CVD | Deshabilitado | No es medición capacitiva | `ADCON1` = 0x00 |
-| Error calculation mode | **Actual result vs setpoint** | El hardware calcula `ADERR` = `ADRES` − `ADSTPT` en cada muestra | `ADCON3.ADCALC` |
-| Setpoint | **2048** | Consigna del auto-cero (centro de la escala FVR) | `ADSTPT` = 0x0800 |
-| Upper threshold | **+2039** | `ADERR` > 2039 ⇔ código ≥ 4088 → saturación alta | `ADUTH` = 0x07F7 |
-| Lower threshold | **−2040** | `ADERR` < −2040 ⇔ código ≤ 7 → saturación baja | `ADLTH` = 0xF808 |
-| Threshold Interrupt Mode | **ADERR < ADLTH o ADERR > ADUTH** | Marca la saturación en hardware (`ADTIF`, `UTHR`/`LTHR`) | `ADCON3.ADTMD` |
-| ADC Threshold Interrupt (ADTI) | **Deshabilitado** | `ADTIF` funciona como bandera pegajosa que la ISR ADI consulta. Sin fuente extra en la ISR | `PIE1.ADTIE` = 0 |
-| ADC Interrupt (ADI) | **Habilitado** | Fin de conversión → copiar resultado y elegir canal | `PIE1.ADIE` = 1 |
-| Canales (Pin Manager) | ANC0 = RC0 (I), ANC1 = RC1 (Q) | PCB | `ADPCH` 0x10 / 0x11 |
+| Campo                          | Valor                             | Por qué                                                                                    | Comprobar                               |
+| ------------------------------ | --------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------- |
+| Enable ADC                     | Sí                                | —                                                                                          | `ADCON0.ADON` = 1                       |
+| Clock Source                   | FOSC/ADCLK                        | Reloj síncrono y determinista                                                              | `ADCON0.ADCS` = 0                       |
+| Clock divider                  | **FOSC/32 → TAD = 2 µs**          | Dentro de AD20 (0,5–9 µs). Conversión de 28,5 µs                                           | `ADCLK` = 0x0F                          |
+| Result Alignment               | Right                             | Código directo 0–4095                                                                      | `ADCON0.ADFM` = 1 → `ADCON0` = **0x84** |
+| Positive Reference             | **FVR**                           | Corrección 2                                                                               | `ADREF.ADPREF` = 11                     |
+| Negative Reference             | VSS                               | —                                                                                          | `ADREF` = **0x03**                      |
+| Auto-conversion Trigger        | **TMR4** (postscaled)             | Disparo 100 % hardware (§4)                                                                | `ADACT` = **0x06**                      |
+| Operating Mode                 | **Basic mode**                    | Sin promedio (restricción del equipo)                                                      | `ADCON2.ADMD` = 000                     |
+| Continuous operation           | No                                | Una conversión por disparo                                                                 | `ADCON0.ADCONT` = 0                     |
+| Acquisition Count              | **640** (MCC debe mostrar 40 µs)  | §4.6. Ver la prueba V3                                                                     | `ADACQH:ADACQL` = 0x02:0x80             |
+| Precharge Count                | 0                                 | Sin precarga. C22/C32 aportan la carga                                                     | `ADPRE` = 0                             |
+| Additional S&H capacitance     | 0                                 | La capacidad extra alarga el asentamiento                                                  | `ADCAP` = 0                             |
+| Repeat count                   | 0                                 | Sin ráfagas ni promedio                                                                    | `ADRPT` = 0                             |
+| Double sampling                | Deshabilitado                     | Evita la errata 1.1.2                                                                      | `ADCON1` = 0x00                         |
+| Guard ring / CVD               | Deshabilitado                     | No es medición capacitiva                                                                  | `ADCON1` = 0x00                         |
+| Error calculation mode         | **Actual result vs setpoint**     | El hardware calcula `ADERR` = `ADRES` − `ADSTPT` en cada muestra                           | `ADCON3.ADCALC`                         |
+| Setpoint                       | **2048**                          | Consigna del auto-cero (centro de la escala FVR)                                           | `ADSTPT` = 0x0800                       |
+| Upper threshold                | **+2039**                         | `ADERR` > 2039 ⇔ código ≥ 4088 → saturación alta                                           | `ADUTH` = 0x07F7                        |
+| Lower threshold                | **−2040**                         | `ADERR` < −2040 ⇔ código ≤ 7 → saturación baja                                             | `ADLTH` = 0xF808                        |
+| Threshold Interrupt Mode       | **ADERR < ADLTH o ADERR > ADUTH** | Marca la saturación en hardware (`ADTIF`, `UTHR`/`LTHR`)                                   | `ADCON3.ADTMD`                          |
+| ADC Threshold Interrupt (ADTI) | **Deshabilitado**                 | `ADTIF` funciona como bandera pegajosa que la ISR ADI consulta. Sin fuente extra en la ISR | `PIE1.ADTIE` = 0                        |
+| ADC Interrupt (ADI)            | **Habilitado**                    | Fin de conversión → copiar resultado y elegir canal                                        | `PIE1.ADIE` = 1                         |
+| Canales (Pin Manager)          | ANC0 = RC0 (I), ANC1 = RC1 (Q)    | PCB                                                                                        | `ADPCH` 0x10 / 0x11                     |
 
 > MCC no deja `ADPCH` en ANC0 al iniciar (queda en ANA0 = ICSPDAT). La máquina de estados lo fija antes de arrancar Timer4 (§7.3).
 >
@@ -449,6 +449,8 @@ Para leer FVRA2X (DIA, 0x8119) se agrega además el módulo **Memory (NVM)** de 
 | Postscaler | 1:5 | 2 ms × 5 = **10 ms** | `OUTPS` = 0100 → `T6CON` = **0xE4** |
 | Interrupt | **Habilitada** | La ISR solo cuenta ticks. Las esperas de la FSM se miden en ticks | `PIE4.TMR6IE` = 1 |
 
+**Nota de campo (confirmado 12/11/2026).** En la versión de MCC Classic usada en este proyecto, el campo *Timer Period* del Easy Setup de TMR6 ya incluye el postscaler (no es el período previo a postscalar, como asume la fila de arriba). Hay que escribir **10 ms** directamente en ese campo para que MCC calcule `T6PR` = 124 (0x7C). Escribir 2 ms genera `T6PR` = 24, un tick real de 2 ms en vez de 10 ms (error 5×, detectado y corregido en este proyecto). Ante cualquier duda, manda siempre el valor de la columna Comprobar (`T6PR` = 124): ajustar el campo del Easy Setup hasta que el registro generado coincida con ese valor, sin importar qué unidad muestre el campo.
+
 Usos del tick: espera de asentamiento del auto-cero, 50 ticks = 500 ms; antirrebote de SW2, 3 ticks = 30 ms; persistencia de alarma, 10 ticks = 100 ms; parpadeo del LED.
 
 ### 6.9 CCP1 · Reloj de muestreo visible (validación)
@@ -460,6 +462,8 @@ Usos del tick: espera de asentamiento del auto-cero, 50 ticks = 500 ms; antirreb
 | Duty | 50 % | Periodo de 4·(249 + 1) = 1000 cuentas | `CCPR1` = 500 (0x01F4), alineado a la derecha |
 | Pin | **RC6** (pin 8, TP_PIC_8) | Pad libre | `RC6PPS` = 0x09 |
 | Resultado | 1 kHz, flanco de subida = disparo de I o de Q | Para medir el periodo y su histograma con osciloscopio | — |
+
+**Nota de campo (confirmado 12/11/2026).** En el desplegable `MODE` de Registers → CCP1CON, la única opción de tipo PWM que ofrece MCC Classic para este chip es "PWM" (sin variante de polaridad invertida); genera `CCP1CON` = **0x8C**, no 0x8F. No hay forma de llegar a 0x8F desde la GUI en esta versión de MCC. Como el módulo es opcional y solo alimenta el reloj de validación (no afecta la adquisición de I/Q ni el UART), se acepta `CCP1CON` = 0x8C.
 
 Es opcional en la versión de entrega. Si se quita, RC6 queda como salida digital en 0.
 
@@ -827,6 +831,8 @@ La velocidad de la sonda debe dejar la respuesta del defecto dentro de la banda 
 | 7 | Piso de rechazo real del Sallen-Key a 15,6 kHz y 19,2 kHz | Prueba 4.7 |
 | 8 | Ruido del FVR | §9.5 |
 | 9 | Los archivos CAD adjuntos tienen SHA-256 distinto del registrado el 5/11 (`.SchDoc` `ea97b2fd…`, `.PcbDoc` `ff54045b…`), pero las nets del PIC, los conectores y los jumpers coinciden con el documento de contextualización | Verificado en la extracción |
+| 10 | Campo *Timer Period* de TMR6 en MCC Classic: ya incluye el postscaler, hay que escribir 10 ms (no 2 ms) para que `T6PR` = 124 | Confirmado en banco de pruebas de este proyecto, 12/11/2026 (§6.8) |
+| 11 | `CCP1CON` = 0x8F (polaridad invertida) no es alcanzable desde el Easy Setup/Registers de MCC Classic para este chip; solo existe la opción "PWM" que da 0x8C | Confirmado; se acepta 0x8C porque CCP1 es opcional (§6.9) |
 
 ---
 
