@@ -6,6 +6,7 @@
 
 #define PROTO_BUF_TX         40u   /* el mensaje mas largo, S:MEDIR con residuos de 4 cifras, mide 31 */
 #define PROTO_DUTY_MAX       1023u /* sec. 7.4: duty 0-1023 */
+#define PROTO_MENSAJES       0     /* 0 = solo lineas "I,Q" (sin S:/OK:/E:); 1 = protocolo completo de la sec. 7.4 */
 
 static char buf_tx[PROTO_BUF_TX];
 
@@ -28,10 +29,23 @@ static uint8_t add_i16(uint8_t n, int16_t v)
     return (uint8_t)(n + ascii_i16_signo(&buf_tx[n], v));
 }
 
-static bool enviar_linea(uint8_t n)
+/* Lineas de datos "I,Q": siempre se envian. */
+static bool enviar_datos(uint8_t n)
 {
     n = add_str(n, "\r\n");
     return tx_DAT(buf_tx, n);
+}
+
+/* Mensajes S:, OK:, E: y P: (sec. 7.4). Con PROTO_MENSAJES = 0 no sale ninguno por la UART:
+ * el PIC solo manda lineas "I,Q". Los comandos del PC se siguen ejecutando, sin respuesta. */
+static bool enviar_linea(uint8_t n)
+{
+#if PROTO_MENSAJES
+    return enviar_datos(n);
+#else
+    (void)n;
+    return true;
+#endif
 }
 
 bool proto_datos(uint16_t i, uint16_t q)
@@ -39,7 +53,7 @@ bool proto_datos(uint16_t i, uint16_t q)
     uint8_t n = add_u16(0, i);
     buf_tx[n++] = ',';
     n = add_u16(n, q);
-    return enviar_linea(n);
+    return enviar_datos(n);
 }
 
 void proto_s_macro(uint16_t fvr_mv)
