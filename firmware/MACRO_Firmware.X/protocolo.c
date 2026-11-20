@@ -6,7 +6,9 @@
 
 #define PROTO_BUF_TX         40u   /* el mensaje mas largo, S:MEDIR con residuos de 4 cifras, mide 31 */
 #define PROTO_DUTY_MAX       1023u /* sec. 7.4: duty 0-1023 */
-#define PROTO_MENSAJES       0     /* 0 = solo lineas "I,Q" (sin S:/OK:/E:); 1 = protocolo completo de la sec. 7.4 */
+/* 1 = protocolo completo de la sec. 7.4: hace falta para probar el auto-cero (S:CAL, S:MEDIR, S:FALLO, OK:).
+ * 0 = solo lineas "I,Q", para capturas de SINAD sin mensajes intercalados. */
+#define PROTO_MENSAJES       1
 
 static char buf_tx[PROTO_BUF_TX];
 
