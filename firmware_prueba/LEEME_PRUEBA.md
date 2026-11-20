@@ -14,13 +14,42 @@ Todo lo nuevo está marcado con `[PRUEBA]` en el código. No se agregó ningún 
 |---|---|
 | `mcc_generated_files/adcc.c` | `ADCON3` pasa de `0x24` a `0x14` (corrección real, ver abajo) |
 | `adquisicion.c/.h` | Los dos canales que alterna la ISR son variables (antes constantes). Marcador de RC7 apagable |
-| `protocolo.c/.h` | Comandos `D:`, `X:`, `B`, `E?`. Ráfaga de 256 pares en RAM. Contador de TXOVR |
-| `fsm.c/.h` | Ejecuta `D:` y `X:` solo en REPOSO. Bloquea el auto-cero mientras haya un diagnóstico activo. Envía `S:DIAG` al arrancar |
+| `protocolo.c/.h` | Comandos `D:`, `X:`, `B`, `E?`. Ráfaga de 256 pares en RAM. Contador de TXOVR. **20/11:** mensajes `S:AZ`, `S:RETIENE` y `S:FALLO,RESIDUO,…`; cola de 6 mensajes para que no se pierdan cuando salen varios juntos |
+| `fsm.c/.h` | Ejecuta `D:` y `X:` solo en REPOSO. Bloquea el auto-cero mientras haya un diagnóstico activo. Envía `S:DIAG` al arrancar. **20/11:** el auto-cero fallido se queda aplicado y SW2 hace de stop (ver abajo) |
 | `main.c` | Llama a `proto_par` y `proto_diag_bombear` |
 
 Se mantienen las reglas: el disparo sigue siendo de Timer4 por hardware, nunca se escribe `ADGO`, la referencia sigue siendo FVR 2,048 V, no hay esperas bloqueantes ni promedio.
 
-Memoria: unas 1 340 de 2 048 bytes de RAM (1 024 son la ráfaga).
+Memoria: unas 1 590 de 2 048 bytes de RAM (1 024 son la ráfaga y 240 la cola de mensajes).
+
+## Auto-cero en esta copia (20/11/2026)
+
+Dos cambios de comportamiento, cada uno con su interruptor al principio de `fsm.c` (en 0 vuelve a lo que pide §7.3):
+
+| Interruptor | Con 1 (por defecto en esta copia) |
+|---|---|
+| `PRUEBA_RETENER_RESULTADO` | Si el auto-cero termina en `LIM_I`, `LIM_Q` o `RESIDUO`, avisa con `S:FALLO` pero **no vuelve a REPOSO**: pasa a MANUAL con los duty hallados (LED a 2 Hz). El canal que quedó en 0 o 1023 vuelve a 512. Se avisan los dos canales si fallan los dos. Desde ahí se puede corregir con `P:I,n` / `P:Q,n` |
+| `PRUEBA_SW2_PARA` | **SW2 es inicio y stop.** En REPOSO arranca el auto-cero. En cualquier otro estado (calibrando, MANUAL, MEDIR, ALARMA) una pulsación lleva a REPOSO y se queda ahí. Para recalibrar: dos pulsaciones o `Z` |
+
+SW1 es el MCLR: mientras está apretado el PIC está en reset y al soltarlo arranca de nuevo. Eso no se puede cambiar por firmware sin perder la programación con el SNAP (`LVP` = ON obliga a usar MCLR).
+
+Mensajes nuevos, en orden, al cerrar cada paso:
+
+| Mensaje | Significado |
+|---|---|
+| `S:AZ,<n>,<dI>,<cI>,<dQ>,<cQ>` | Paso n (1–10): duty con que se probó cada canal y código leído. El bit se queda si el código > 2048. Con estas líneas se saca la pendiente código/duty de cada canal |
+| `S:CAL,<n>,<dI>,<dQ>` | Igual que antes: lo ya decidido |
+| `S:FALLO,LIM_I` / `S:FALLO,LIM_Q` | Ese canal llegó a 0 o 1023 |
+| `S:FALLO,RESIDUO,<rI>,<rQ>` | La muestra de VALIDAR que quedó fuera de ±`TOL_AZ` |
+| `S:RETIENE,<dI>,<dQ>` | Duty que quedan aplicados, seguido de `S:MANUAL` |
+
+`E?` responde ahora `S:CNT,a,b,c,d`: el cuarto número son los mensajes perdidos con la cola llena (debe ser 0).
+
+La interfaz solo muestra los tres últimos mensajes. Para ver la traza completa del auto-cero en la terminal:
+
+```
+python diag_sinad.py capturar --puerto COM5 --segundos 12 --salida az.csv --cmd Z
+```
 
 ## Comandos nuevos (terminados en `\n`, solo en REPOSO)
 
@@ -34,7 +63,7 @@ Memoria: unas 1 340 de 2 048 bytes de RAM (1 024 son la ráfaga).
 | `X:L,0` / `X:L,1` | Apaga / enciende el LED | `OK:X` |
 | `X:T,0` / `X:T,1` | Apaga / enciende las líneas de datos | `OK:X` |
 | `B` | Ráfaga: la UART calla 100 ms, se guardan 256 pares (0,512 s) en RAM **sin transmitir nada** y después se envían entre `S:RAFAGA,256` y `S:FIN` | `OK:B` |
-| `E?` | Contadores desde el arranque: pares que main no alcanzó a leer, pares mal formados, líneas perdidas por FIFO llena | `S:CNT,a,b,c` |
+| `E?` | Contadores desde el arranque: pares que main no alcanzó a leer, pares mal formados, líneas perdidas por FIFO llena, mensajes perdidos con la cola llena | `S:CNT,a,b,c,d` |
 
 Con `D:1` o `X:P,0` activos, `Z`, SW2 y `A:1` responden `E:estado`: primero `D:0` y `X:P,1`. Un reset deja todo normal.
 

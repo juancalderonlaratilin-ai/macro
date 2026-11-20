@@ -29,6 +29,18 @@ static uint16_t     raf_k;
 static bool         flujo_apagado;
 static uint16_t     n_txovr;
 
+/* ---- [PRUEBA] cola de mensajes ----
+ * Al cerrar el auto-cero salen hasta 6 mensajes en el mismo par (S:AZ, S:CAL, S:FALLO x2,
+ * S:RETIENE, S:MANUAL), unos 110 bytes, y la FIFO de TX tiene 63 libres. Lo que no cabe se
+ * guarda aqui entero y se envia en las vueltas siguientes de main, siempre en orden y entre
+ * dos lineas de datos (nunca se parte un mensaje). */
+#define COLA_MENSAJES        6u    /* mensajes completos en espera */
+static char         cola_txt[COLA_MENSAJES][PROTO_BUF_TX];
+static uint8_t      cola_len[COLA_MENSAJES];
+static uint8_t      cola_cabeza;
+static uint8_t      cola_cuenta;
+static uint16_t     n_msg_perdidos;    /* mensajes descartados con la cola llena (4o campo de S:CNT) */
+
 /* ---- Armado de mensajes ---- */
 static uint8_t add_str(uint8_t n, const char *s)
 {
@@ -55,9 +67,51 @@ static bool enviar_datos(uint8_t n)
     return tx_DAT(buf_tx, n);
 }
 
+/* [PRUEBA] Intenta enviar los mensajes en espera, del mas viejo al mas nuevo. */
+static void vaciar_cola(void)
+{
+    while (cola_cuenta != 0u) {
+        if (!tx_DAT(cola_txt[cola_cabeza], cola_len[cola_cabeza])) {
+            return;                         /* no cabe: se reintenta en la proxima vuelta */
+        }
+        cola_cabeza = (uint8_t)((cola_cabeza + 1u) % COLA_MENSAJES);
+        cola_cuenta--;
+    }
+}
+
 /* Mensajes S:, OK:, E: y P: (sec. 7.4). Con PROTO_MENSAJES = 0 no sale ninguno por la UART:
- * el PIC solo manda lineas "I,Q". Los comandos del PC se siguen ejecutando, sin respuesta. */
+ * el PIC solo manda lineas "I,Q". Los comandos del PC se siguen ejecutando, sin respuesta.
+ * [PRUEBA] Si la FIFO esta llena (o ya hay mensajes esperando) el mensaje va a la cola.
+ * Devuelve false solo si se perdio (cola llena). */
 static bool enviar_linea(uint8_t n)
+{
+#if PROTO_MENSAJES
+    uint8_t k, idx;
+
+    n = add_str(n, "\r\n");
+    if (cola_cuenta == 0u && tx_DAT(buf_tx, n)) {
+        return true;
+    }
+    if (cola_cuenta >= COLA_MENSAJES) {
+        n_msg_perdidos++;
+        return false;
+    }
+    idx = (uint8_t)((cola_cabeza + cola_cuenta) % COLA_MENSAJES);
+    for (k = 0; k < n; k++) {
+        cola_txt[idx][k] = buf_tx[k];
+    }
+    cola_len[idx] = n;
+    cola_cuenta++;
+    return true;
+#else
+    (void)n;
+    return true;
+#endif
+}
+
+/* [PRUEBA] Para la rafaga: sin cola, para que S:RAFAGA y S:FIN no queden detras de las
+ * lineas del volcado. true = ya esta en la FIFO. */
+static bool enviar_linea_directa(uint8_t n)
 {
 #if PROTO_MENSAJES
     return enviar_datos(n);
@@ -111,9 +165,13 @@ bool proto_par(uint16_t i, uint16_t q)
 
 void proto_diag_bombear(void)
 {
+    vaciar_cola();
+    if (cola_cuenta != 0u) {
+        return;                     /* primero los mensajes pendientes, despues la rafaga */
+    }
     switch (raf_estado) {
     case RAF_CABECERA:
-        if (enviar_linea(add_u16(add_str(0, "S:RAFAGA,"), PROTO_RAFAGA_PARES))) {
+        if (enviar_linea_directa(add_u16(add_str(0, "S:RAFAGA,"), PROTO_RAFAGA_PARES))) {
             raf_estado = RAF_VOLCADO;
         }
         break;
@@ -127,7 +185,7 @@ void proto_diag_bombear(void)
         }
         break;
     case RAF_FIN:
-        if (enviar_linea(add_str(0, "S:FIN"))) {
+        if (enviar_linea_directa(add_str(0, "S:FIN"))) {
             raf_estado = RAF_INACTIVA;
         }
         break;
@@ -143,12 +201,14 @@ void proto_diag_flujo(bool encendido)
 
 static void responder_contadores(void)
 {
-    uint8_t n = add_str(0, "S:CNT,");      /* pares perdidos, pares descartados, lineas TXOVR */
+    uint8_t n = add_str(0, "S:CNT,");      /* pares perdidos, descartados, lineas TXOVR, mensajes perdidos */
     n = add_u16(n, adq_pares_perdidos());
     n = add_str(n, ",");
     n = add_u16(n, adq_pares_descartados());
     n = add_str(n, ",");
-    (void)enviar_linea(add_u16(n, n_txovr));
+    n = add_u16(n, n_txovr);
+    n = add_str(n, ",");
+    (void)enviar_linea(add_u16(n, n_msg_perdidos));
 }
 
 void proto_s_macro(uint16_t fvr_mv)
@@ -192,6 +252,37 @@ void proto_s_alarma(const char *causa)
 void proto_s_fallo(const char *causa)
 {
     (void)enviar_linea(add_str(add_str(0, "S:FALLO,"), causa));
+}
+
+/* ---- [PRUEBA] Mensajes del auto-cero ---- */
+void proto_s_az(uint8_t paso, uint16_t di, uint16_t ci, uint16_t dq, uint16_t cq)
+{
+    uint8_t n = add_str(0, "S:AZ,");
+    n = add_u16(n, paso);
+    n = add_str(n, ",");
+    n = add_u16(n, di);
+    n = add_str(n, ",");
+    n = add_u16(n, ci);
+    n = add_str(n, ",");
+    n = add_u16(n, dq);
+    n = add_str(n, ",");
+    (void)enviar_linea(add_u16(n, cq));
+}
+
+void proto_s_fallo_residuo(int16_t ri, int16_t rq)
+{
+    uint8_t n = add_str(0, "S:FALLO,RESIDUO,");
+    n = add_i16(n, ri);
+    n = add_str(n, ",");
+    (void)enviar_linea(add_i16(n, rq));
+}
+
+void proto_s_retiene(uint16_t di, uint16_t dq)
+{
+    uint8_t n = add_str(0, "S:RETIENE,");
+    n = add_u16(n, di);
+    n = add_str(n, ",");
+    (void)enviar_linea(add_u16(n, dq));
 }
 
 /* ---- Respuestas a comandos ---- */

@@ -31,6 +31,15 @@ void proto_diag_bombear(void);
 /* X:T,1 / X:T,0: enciende o apaga las lineas de datos. */
 void proto_diag_flujo(bool encendido);
 
+/* Mensajes extra del auto-cero (solo en esta copia):
+ * "S:AZ,<paso>,<dI>,<cI>,<dQ>,<cQ>": duty con que se probo cada canal en ese paso y el
+ *    codigo que se leyo; con eso el bit se conserva si codigo > 2048. Sale antes de S:CAL.
+ * "S:FALLO,RESIDUO,<rI>,<rQ>": la muestra de VALIDAR que quedo fuera de TOL_AZ.
+ * "S:RETIENE,<dI>,<dQ>": duty que quedan aplicados en MANUAL tras un fallo. */
+void proto_s_az(uint8_t paso, uint16_t di, uint16_t ci, uint16_t dq, uint16_t cq); /* "S:AZ,3,896,4095,384,4095" */
+void proto_s_fallo_residuo(int16_t ri, int16_t rq);       /* "S:FALLO,RESIDUO,+110,-3" */
+void proto_s_retiene(uint16_t di, uint16_t dq);           /* "S:RETIENE,512,455" */
+
 /* ---- PC -> PIC ---- */
 /* Lee los bytes que haya en la FIFO de RX (sin esperar), arma la linea hasta '\n'
  * y ejecuta el comando contra la FSM. Responde OK:/E:. Llamar en cada vuelta de main. */

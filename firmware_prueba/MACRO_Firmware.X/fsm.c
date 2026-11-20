@@ -75,6 +75,16 @@ static bool           diag_internos;         /* D:1 activo: el ADC no esta midie
 static bool           diag_pwm_parado;       /* X:P,0 activo: Timer2 detenido, no hay comando I0/Q0 */
 static bool           diag_led_apagado;      /* X:L,0 activo */
 
+/* ---- [PRUEBA] Cambios de comportamiento de esta copia (0 = como pide la sec. 7.3) ----
+ * RETENER: si el auto-cero termina en LIM_x o RESIDUO, se avisa con S:FALLO pero, en vez de
+ *   volver a REPOSO (comandos en VREF_BUF), se pasa a MANUAL con los duty hallados. El canal
+ *   que quedo en 0 o 1023 vuelve a 512. EN_AZ_PIC = 1 en MANUAL cumple la regla 11.
+ * SW2_PARA: SW2 en cualquier estado activo (MANUAL, HABILITAR, CALIBRAR, VALIDAR, MEDIR,
+ *   ALARMA, FALLO) lleva a REPOSO con una sola pulsacion. En REPOSO arranca el auto-cero.
+ *   Para recalibrar desde MEDIR o MANUAL: dos pulsaciones, o el comando Z. */
+#define PRUEBA_RETENER_RESULTADO 1
+#define PRUEBA_SW2_PARA          1
+
 /* ---- Utilidades ---- */
 static void aplicar_duty(void)
 {
@@ -274,6 +284,13 @@ void fsm_tick(void)
     }
     led_actualizar();
 
+#if PRUEBA_SW2_PARA
+    if (z && estado != FSM_INICIO && estado != FSM_PREPARAR && estado != FSM_REPOSO) {
+        entrar(FSM_REPOSO);                         /* [PRUEBA] stop: EN_AZ_PIC = 0, J3 = VREF_BUF */
+        z = false;
+    }
+#endif
+
     switch (estado) {
     case FSM_INICIO:
         entrar(FSM_PREPARAR);
@@ -360,6 +377,42 @@ void fsm_tick(void)
     txovr_tick = false;
 }
 
+/* ---- [PRUEBA] Fin del auto-cero sin exito: deja aplicado lo hallado (ver PRUEBA_RETENER_RESULTADO) ---- */
+#if PRUEBA_RETENER_RESULTADO
+static void retener_resultado(void)
+{
+    aplicar_duty();
+    proto_s_retiene(duty_i, duty_q);
+    entrar(FSM_MANUAL);                             /* EN_AZ_PIC = 1, LED a 2 Hz, acepta P:, R, A:0, Z */
+}
+#endif
+
+/* Cierre de los 10 pasos. sec. 7.3: ningun duty puede quedar en 0 o 1023. */
+static void terminar_busqueda(void)
+{
+    bool lim_i = (duty_i == 0u || duty_i == AZ_DUTY_MAX);
+    bool lim_q = (duty_q == 0u || duty_q == AZ_DUTY_MAX);
+
+    if (!lim_i && !lim_q) {
+        entrar(FSM_VALIDAR);
+        return;
+    }
+#if PRUEBA_RETENER_RESULTADO
+    if (lim_i) {                                    /* [PRUEBA] se avisan los dos canales, no solo el primero */
+        proto_s_fallo("LIM_I");
+        duty_i = AZ_DUTY_NEUTRO;
+    }
+    if (lim_q) {
+        proto_s_fallo("LIM_Q");
+        duty_q = AZ_DUTY_NEUTRO;
+    }
+    retener_resultado();
+#else
+    causa_fallo = lim_i ? FALLO_LIM_I : FALLO_LIM_Q;
+    entrar(FSM_FALLO);
+#endif
+}
+
 /* ---- Un par nuevo (~500 por segundo) ---- */
 void fsm_par(const adq_par_t *par, bool enviado)
 {
@@ -376,31 +429,30 @@ void fsm_par(const adq_par_t *par, bool enviado)
     }
 
     if (estado == FSM_CALIBRAR && cal_esperando) {
+        uint16_t probado_i = duty_i;                /* [PRUEBA] duty con que se tomo esta muestra */
+        uint16_t probado_q = duty_q;
         bool fin = az_decidir(par->i, par->q);
         cal_esperando = false;
         t_estado = 0;
         duty_i = az_duty_i();
         duty_q = az_duty_q();
         aplicar_duty();
+        proto_s_az(az_pasos_hechos(), probado_i, par->i, probado_q, par->q);   /* [PRUEBA] */
         proto_s_cal(az_pasos_hechos(), az_decidido_i(), az_decidido_q());
         if (fin) {
-            /* sec. 7.3 VALIDAR: ningun duty en 0 o 1023 */
-            if (duty_i == 0u || duty_i == AZ_DUTY_MAX) {
-                causa_fallo = FALLO_LIM_I;
-                entrar(FSM_FALLO);
-            } else if (duty_q == 0u || duty_q == AZ_DUTY_MAX) {
-                causa_fallo = FALLO_LIM_Q;
-                entrar(FSM_FALLO);
-            } else {
-                entrar(FSM_VALIDAR);
-            }
+            terminar_busqueda();
         }
     } else if (estado == FSM_VALIDAR) {
         residuo_i = error_codigo(par->i);
         residuo_q = error_codigo(par->q);
         if (!dentro_de_tol(residuo_i) || !dentro_de_tol(residuo_q)) {
+#if PRUEBA_RETENER_RESULTADO
+            proto_s_fallo_residuo(residuo_i, residuo_q);
+            retener_resultado();
+#else
             causa_fallo = FALLO_RESIDUO;
             entrar(FSM_FALLO);
+#endif
         }
     }
 }
