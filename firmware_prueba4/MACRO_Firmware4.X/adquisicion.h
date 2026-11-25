@@ -12,6 +12,12 @@
 #define ADQ_ADPCH_FVR2           0x3Fu   /* [PRUEBA] canal interno FVR buffer 2 (se pone en 1x = 1,024 V) */
 #define ADQ_DIA_FVRA2X_DIR       0x8119u /* DIA: FVR x2 en mV (sec. 5.2) */
 #define ADQ_ADREF_VDD            0x00u   /* [PRUEBA4] ADPREF = VDD, ADNREF = VSS (MCC deja 0x03 = FVR) */
+#define ADQ_VDD_MV               3700u   /* [PRUEBA4] PENDIENTE: VDD medido con multimetro (sec. 0: 3,70 V nominal).
+                                          * Solo viaja en S:MACRO,VDD= para que el PC pase a voltios;
+                                          * el PIC no hace ninguna cuenta con el */
+#define ADQ_BOMBA_CARGA          1       /* [PRUEBA4] bomba de carga del ADC (ADCPCON0.CPON, DS40001985 sec. 32.4):
+                                          * 1 = encendida, el ADC la pide en cada conversion; 0 = apagada
+                                          * (valor de reset; MCC no escribe ADCPCON0). No esta en la especificacion */
 #define ADQ_UMBRAL_BAJO_CODIGOS  8u      /* [PRUEBA3] ADTIF si ADRES < 8 (sec. 6.4) */
 #define ADQ_UMBRAL_ALTO_CODIGOS  4087u   /* [PRUEBA3] ADTIF si ADRES > 4087 (sec. 6.4) */
 #define ADQ_MARCADOR_ISR_DBG     1       /* 1 = RC7 sube durante la ISR ADI (prueba V2); 0 = apagado */
@@ -25,7 +31,8 @@ typedef struct {
 
 /* Instala los handlers: ADCC_SetADIInterruptHandler y TMR6_SetInterruptHandler.
  * Llamar despues de SYSTEM_Initialize y antes de habilitar GIE. */
-void adq_iniciar(void);     /* [PRUEBA4] tambien pone ADREF = VDD antes del primer disparo */
+void adq_iniciar(void);     /* [PRUEBA4] tambien pone ADREF = VDD y la bomba de carga segun
+                             * ADQ_BOMBA_CARGA, antes del primer disparo */
 
 /* Ultimo paso de PREPARAR: ADPCH = ANC0, borra ADIF/ADTIF y arranca Timer4. */
 void adq_arrancar(void);
@@ -37,8 +44,10 @@ uint16_t adq_leer_fvra2x(void);
  * compara contra ADERR = ADRES - ADSTPT (ADCALC = 001, ADTMD = 100; sec. 6.4):
  *   ADLTH = 8 - consigna     -> ADTIF si ADRES <= 7
  *   ADUTH = 4087 - consigna  -> ADTIF si ADRES >= 4088
- * Con consigna 2048 da los mismos valores que MCC (0xF808 y 0x07F7). Llamarla antes de
- * adq_arrancar(). No toca los archivos de MCC: usa sus funciones. */
+ * Con consigna 2048 da los mismos valores que MCC (0x0800, 0xF808 y 0x07F7). [PRUEBA4] La
+ * consigna es fija (AZ_CONSIGNA = 2048), asi que solo vuelve a escribir lo que dejo MCC: queda
+ * para que el ADC y la FSM usen la misma consigna aunque MCC se regenere con otra. Llamarla
+ * antes de adq_arrancar(). No toca los archivos de MCC: usa sus funciones. */
 void adq_fijar_consigna(uint16_t consigna);
 
 /* Si hay un par nuevo lo copia en *par y devuelve true (cada par se entrega una vez). */

@@ -7,19 +7,12 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-/* ---- [PRUEBA4] Referencia del ADC = VDD (rompe la regla 2 a pedido del equipo) ----
- * La sec. 5.3 fija la consigna en el codigo 2048 con el FVR (1,024 V). Esta copia usa VDD
- * como referencia del ADC, asi que la escala va de 0 a VDD y el codigo 2048 es VDD/2.
- * La consigna se calcula con la misma formula de firmware_prueba3, con VDD en vez del FVR:
- *     consigna = redondear(4096 x V_objetivo / VDD)
- * 1850 mV con VDD = 3700 mV -> 2048 (centro de la escala, +/-1,85 V de rango). */
-#define AZ_V_OBJETIVO_MV         1850u   /* Vref2 de practica 2; medirla y ajustarla aqui */
-#define AZ_VDD_MV                3700u   /* PENDIENTE: VDD medido con multimetro (sec. 0: 3,70 V nominal) */
-#define AZ_VREF_MIN_MV           3000u   /* fuera de 3,0..4,2 V se usa AZ_VDD_NOMINAL_MV */
-#define AZ_VREF_MAX_MV           4200u
-#define AZ_VDD_NOMINAL_MV        3700u
-#define AZ_CODIGO_SAT_BAJO       7u      /* <= 7 es saturacion abajo (ADLTH, sec. 6.4) */
-#define AZ_CODIGO_SAT_ALTO       4088u   /* >= 4088 es saturacion arriba (ADUTH, sec. 6.4) */
+/* ---- [PRUEBA4] Referencia del ADC = VDD (sec. 5.0) ----
+ * Con VDD como referencia la escala va de 0 a VDD y el codigo 2048 es VDD/2. Vref2 de
+ * practica 2 tambien es VDD/2 (VREF_BUF), asi que el reposo cae en 2048 sea cual sea el VDD
+ * real: la consigna es fija y no hace falta la cuenta 4096 x V_objetivo / VDD de
+ * firmware_prueba3. Es el mismo valor de ADSTPT que deja MCC (sec. 6.4). */
+#define AZ_CONSIGNA              2048u   /* codigo de VDD/2 = Vref2 ~ 1,85 V (sec. 5.0, sec. 6.4) */
 
 /* ---- Valores fijos del diseno ---- */
 #define AZ_PASOS                 10u     /* un bit por paso, del bit 9 al 0 (sec. 7.3) */
@@ -38,19 +31,6 @@
 #define AZ_MARGEN_TOL_CODIGOS    10u     /* margen sobre un paso PWM (sec. 7.3, tabla de parametros) */
 #define AZ_TOL_CODIGOS           (AZ_PASO_PWM_CODIGOS + AZ_MARGEN_TOL_CODIGOS) /* TOL_AZ: 30 con G = 20 (27 mV) */
 
-/* La consigna no puede acercarse a la saturacion mas que TOL_AZ: VALIDAR tiene que caber. */
-#define AZ_CONSIGNA_MIN          (AZ_CODIGO_SAT_BAJO + 1u + AZ_TOL_CODIGOS)
-#define AZ_CONSIGNA_MAX          (AZ_CODIGO_SAT_ALTO - 1u - AZ_TOL_CODIGOS)
-
-/* [PRUEBA4] Codigo ADC de AZ_V_OBJETIVO_MV con la referencia vref_mv (aqui VDD). Si vref_mv
- * esta fuera de AZ_VREF_MIN_MV..AZ_VREF_MAX_MV usa AZ_VDD_NOMINAL_MV. Acota a
- * AZ_CONSIGNA_MIN..MAX. */
-uint16_t az_calcular_consigna(uint16_t vref_mv);
-
-/* [PRUEBA3] Fija la consigna que usan az_decidir() y los residuos. Arranca en 2048. */
-void     az_fijar_consigna(uint16_t codigos);
-uint16_t az_consigna(void);
-
 /* Empieza una calibracion: acumulados en 0, paso 0. */
 void az_iniciar(void);
 
@@ -67,7 +47,7 @@ uint16_t az_decidido_q(void);
 uint8_t az_pasos_hechos(void);
 
 /* Cierra el paso en curso con una muestra de cada canal. Conserva el bit de
- * prueba si SIGNO * (codigo - consigna) > 0 (el codigo sigue alto: hace falta mas
+ * prueba si SIGNO * (codigo - AZ_CONSIGNA) > 0 (el codigo sigue alto: hace falta mas
  * duty). Devuelve true cuando ya se hicieron los AZ_PASOS pasos. */
 bool az_decidir(uint16_t codigo_i, uint16_t codigo_q);
 

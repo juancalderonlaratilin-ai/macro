@@ -120,7 +120,7 @@ static const char *texto_causa_fallo(causa_fallo_t c)
 
 static int16_t error_codigo(uint16_t codigo)
 {
-    return (int16_t)codigo - (int16_t)az_consigna();        /* [PRUEBA3] consigna calculada al arrancar */
+    return (int16_t)codigo - (int16_t)AZ_CONSIGNA;          /* [PRUEBA4] consigna fija = VDD/2 */
 }
 
 static bool dentro_de_tol(int16_t err)
@@ -298,10 +298,9 @@ void fsm_tick(void)
 
     case FSM_PREPARAR:
         if (FVR_IsOutputReady() && t_estado >= TICKS_PREPARAR) {
-            proto_s_macro_vdd(AZ_VDD_MV);                           /* [PRUEBA4] el PC escala con VDD */
-            az_fijar_consigna(az_calcular_consigna(AZ_VDD_MV));     /* [PRUEBA4] 4096 x V_objetivo / VDD */
-            adq_fijar_consigna(az_consigna());                      /* [PRUEBA3] ADSTPT y umbrales de saturacion */
-            proto_s_consigna(az_consigna(), AZ_V_OBJETIVO_MV);      /* [PRUEBA3] "S:CONSIGNA,2048,1850" */
+            proto_s_macro_vdd(ADQ_VDD_MV);                          /* [PRUEBA4] el PC escala con VDD */
+            adq_fijar_consigna(AZ_CONSIGNA);                        /* ADSTPT y umbrales: los mismos de MCC */
+            proto_s_consigna(AZ_CONSIGNA, ADQ_VDD_MV / 2u);         /* "S:CONSIGNA,2048,1850" (VDD/2, constante) */
             proto_s_estado("DIAG");                 /* [PRUEBA] avisa que esta cargada la copia de diagnostico */
             adq_arrancar();
             entrar(FSM_REPOSO);

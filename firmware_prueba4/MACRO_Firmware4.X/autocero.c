@@ -4,33 +4,11 @@
 static uint16_t decidido_i;
 static uint16_t decidido_q;
 static uint8_t  pasos;
-static uint16_t consigna = 2048u;      /* [PRUEBA3] la FSM la fija al arrancar */
 
 static uint16_t bit_de_prueba(void)
 {
     return (pasos < AZ_PASOS) ? (uint16_t)(1u << (AZ_PASOS - 1u - pasos)) : 0u;
 }
-
-/* [PRUEBA4] consigna = redondear(4096 x V_objetivo / VDD) */
-uint16_t az_calcular_consigna(uint16_t vref_mv)
-{
-    uint32_t c;
-
-    if (vref_mv < AZ_VREF_MIN_MV || vref_mv > AZ_VREF_MAX_MV) {
-        vref_mv = AZ_VDD_NOMINAL_MV;
-    }
-    c = (4096UL * (uint32_t)AZ_V_OBJETIVO_MV + (uint32_t)vref_mv / 2u) / (uint32_t)vref_mv;
-    if (c < AZ_CONSIGNA_MIN) {
-        c = AZ_CONSIGNA_MIN;
-    }
-    if (c > AZ_CONSIGNA_MAX) {
-        c = AZ_CONSIGNA_MAX;
-    }
-    return (uint16_t)c;
-}
-
-void az_fijar_consigna(uint16_t codigos) { consigna = codigos; }
-uint16_t az_consigna(void) { return consigna; }
 
 void az_iniciar(void)
 {
@@ -48,8 +26,8 @@ uint8_t  az_pasos_hechos(void) { return pasos; }
 bool az_decidir(uint16_t codigo_i, uint16_t codigo_q)
 {
     uint16_t bit = bit_de_prueba();
-    int16_t err_i = (int16_t)codigo_i - (int16_t)consigna;
-    int16_t err_q = (int16_t)codigo_q - (int16_t)consigna;
+    int16_t err_i = (int16_t)codigo_i - (int16_t)AZ_CONSIGNA;   /* [PRUEBA4] consigna fija = VDD/2 */
+    int16_t err_q = (int16_t)codigo_q - (int16_t)AZ_CONSIGNA;
 
     if (pasos >= AZ_PASOS) {
         return true;

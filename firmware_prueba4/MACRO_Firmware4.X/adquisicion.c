@@ -78,6 +78,15 @@ static void adq_isr_tmr6(void)
 void adq_iniciar(void)
 {
     ADREF = ADQ_ADREF_VDD;          /* [PRUEBA4] referencia del ADC = VDD (rompe la regla 2; solo esta copia) */
+#if ADQ_BOMBA_CARGA
+    /* [PRUEBA4] Bomba de carga del ADC: mantiene la tension de compuerta de los interruptores de
+     * senal y de referencia (DS40001985 sec. 32.4). Funciona cuando el ADC la pide y CPRDY avisa
+     * cuando ya esta lista. No se espera CPRDY (regla 8): si alguna conversion sale antes, es de
+     * los primeros milisegundos tras el arranque, que no se usan en las mediciones. */
+    ADCPCON0bits.CPON = 1;
+#else
+    ADCPCON0bits.CPON = 0;
+#endif
     i_pendiente = false;
     ADCC_SetADIInterruptHandler(adq_isr_adi);
     TMR6_SetInterruptHandler(adq_isr_tmr6);
